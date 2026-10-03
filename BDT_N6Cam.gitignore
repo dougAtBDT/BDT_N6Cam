@@ -1,6 +1,6 @@
 # Build outputs
-/Debug/
-/Release/
+Debug/
+Release/
 *.o
 *.d
 *.su
