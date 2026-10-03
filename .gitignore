@@ -1,8 +1,4 @@
 # Build outputs
-FSBL/Debug/
-FSBL/Release/
-Debug/
-Release/
 **/Debug/
 **/Release/
 *.o
