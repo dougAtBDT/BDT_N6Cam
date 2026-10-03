@@ -77,9 +77,6 @@ static ISP_StatusTypeDef GetSensorGainHelper(uint32_t Instance, int32_t *Gain);
 static ISP_StatusTypeDef SetSensorExposureHelper(uint32_t Instance, int32_t Exposure);
 static ISP_StatusTypeDef GetSensorExposureHelper(uint32_t Instance, int32_t *Exposure);
 
-/* PSRAM capture debug: uncomment to send the first capture to internal RAM instead of PSRAM */
-//#define DIAG_BUF_INTERNAL
-
 /* Preview frame buffer */
 #ifdef RESOLUTION_LCD	//800*480*3=384,400.
 #define MAX_PREVIEW_BUFFER_WIDTH    640	//640
@@ -130,9 +127,6 @@ uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
 __attribute__ ((section(".psram_bss")))
 __attribute__ ((aligned (32)))
 uint8_t Main_DestBuffer[IMAGE_WIDTH * IMAGE_HEIGHT * 3];	//2400*1600*3 = 11,520,000.  Need to deal with image size at end of ISP_IQParamTypeDef.  IMX355 MAX = 2582 X 1944.
-/* These two don't fit in AXISRAM1 and only link because nothing else in .buffRam is used,
- * so the linker drops the whole section. The diagnostic buffer below would keep them. */
-#ifndef DIAG_BUF_INTERNAL
 __attribute__ ((section(".buffRam")))
 __attribute__ ((aligned (32)))
 uint8_t grayscale_A[IMAGE_WIDTH * IMAGE_HEIGHT];
@@ -140,7 +134,6 @@ uint8_t grayscale_A[IMAGE_WIDTH * IMAGE_HEIGHT];
 __attribute__ ((section(".buffRam")))
 __attribute__ ((aligned (32)))
 uint8_t grayscale_B[IMAGE_WIDTH * IMAGE_HEIGHT];
-#endif
 
 #ifdef SEND_3GRAYS
 __attribute__ ((section(".buffRam")))
@@ -161,18 +154,6 @@ uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
 #define CAM_LINE_SCALE 1	//normal sensor line timing
 #endif
 #define IMX335_REG_HMAX 0x3034	//line length, 16 bit (not in the ST driver's register list)
-
-#ifdef DIAG_BUF_INTERNAL
-#ifdef RESOLUTION_2400_1600
-#error "DIAG_BUF_INTERNAL only has room for 640x480"
-#endif
-__attribute__ ((section(".buffRam")))
-__attribute__ ((aligned (32)))
-uint8_t diagInternalBuf[640 * 480 * 3];
-#define CAPTURE_BUF diagInternalBuf
-#else
-#define CAPTURE_BUF Main_DestBuffer
-#endif
 
 #define USE_HAL_DCMIPP_REGISTER_CALLBACKS 1
 
@@ -245,13 +226,6 @@ unsigned short calcCRC(unsigned char*, unsigned int);
 void printDestBuff (void);
 void clearDestBuff (void);
 void createGrayscale (uint8_t);
-void captureDiagPrepare(void);
-void captureDiagReport(void);
-static void diagLog(uint8_t type);
-#define DIAG_EVT_VSYNC   1
-#define DIAG_EVT_FRAME   2
-#define DIAG_EVT_P1_OVR  3
-#define DIAG_EVT_CSI_ERR 4
 
 /* USER CODE END PFP */
 
@@ -440,9 +414,7 @@ int main(void)
 		  HAL_UART_Transmit(&huart1, (unsigned char*)("ISP INIT GOOD\r\n"), 15, 100);
 	  }
 
-  captureDiagPrepare();	//PSRAM capture debug: fill buffer with 0xA5 and clear error flags
-
-  if (HAL_DCMIPP_CSI_PIPE_Start(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0 , (uint8_t *) CAPTURE_BUF, DCMIPP_MODE_CONTINUOUS) != HAL_OK)	//DCMIPP_MODE_SNAPSHOT  //DCMIPP_MODE_CONTINUOUS
+  if (HAL_DCMIPP_CSI_PIPE_Start(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0 , (uint8_t *) Main_DestBuffer, DCMIPP_MODE_CONTINUOUS) != HAL_OK)	//DCMIPP_MODE_SNAPSHOT  //DCMIPP_MODE_CONTINUOUS
   {
 	  HAL_UART_Transmit(&huart1, (unsigned char*)("PIPE START FAIL\r\n"), 17, 100);
 	  Error_Handler();
@@ -486,7 +458,6 @@ int main(void)
   }
   /* stop the acquisition */
   HAL_DCMIPP_CSI_PIPE_Stop(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0);
-  captureDiagReport();	//PSRAM capture debug: print what DCMIPP wrote and any bus errors
 
   HAL_GPIO_WritePin(CAM_FLASH_GPIO_Port, CAM_FLASH_Pin, GPIO_PIN_RESET);	//IR CAMERA FLASH. VReg.
   HAL_UART_Transmit(&huart1, (unsigned char*)("TOOK TOOK TOOK TOOK PIC\r\n"), 25, 100);
@@ -2434,7 +2405,6 @@ static ISP_StatusTypeDef GetSensorExposureHelper(uint32_t Instance, int32_t *Exp
 void HAL_DCMIPP_PIPE_FrameEventCallback(DCMIPP_HandleTypeDef *hdcmipp, uint32_t Pipe)
 {
   NbMainFrames++;
-  diagLog(DIAG_EVT_FRAME);	//PSRAM capture debug
 }
 
 /**
@@ -2453,7 +2423,6 @@ void HAL_DCMIPP_PIPE_VsyncEventCallback(DCMIPP_HandleTypeDef *hdcmipp, uint32_t 
       ISP_IncDumpFrameId(&hcamera_isp);
       break;
     case DCMIPP_PIPE1 :
-      diagLog(DIAG_EVT_VSYNC);	//PSRAM capture debug
       ISP_IncMainFrameId(&hcamera_isp);
       ISP_GatherStatistics(&hcamera_isp);
       break;
@@ -2882,148 +2851,6 @@ void mergeGrayscales(void){
 }
 #endif	//grayscales
 /*********************************************************/
-/* PSRAM CAPTURE DIAGNOSTICS                             */
-/* Fills the capture buffer with 0xA5 and clears the    */
-/* bus error flags before capture,                      */
-/* then reports afterwards. 0xA5 left = DCMIPP never     */
-/* wrote there.                                          */
-/*********************************************************/
-#define DIAG_BYTES (sizeof(CAPTURE_BUF))	//whole capture buffer; checked in 32-bit words for speed
-#define DIAG_FILL  0xA5A5A5A5UL
-
-/* Event log filled from the DCMIPP interrupt callbacks during the first capture */
-#define DIAG_MAX_EVTS    16
-
-typedef struct {
-	uint8_t  type;
-	uint32_t tick;		//HAL_GetTick() ms
-	uint32_t wrOffset;	//pipe1 write pointer (P1STM0AR) minus buffer start
-	uint32_t errCode;	//hdcmipp.ErrorCode
-	uint32_t csiSr0;	//CSI status registers
-	uint32_t csiSr1;
-} DiagEvt_t;
-
-static volatile uint8_t diagLogging = 0;
-static volatile uint32_t diagNumEvts = 0;
-static volatile uint32_t diagStartTick = 0;
-static volatile uint32_t diagOvrCount = 0;	//every pipe1 overrun, not just the logged ones
-static DiagEvt_t diagEvts[DIAG_MAX_EVTS];
-
-static void diagLog(uint8_t type){
-	if(!diagLogging) return;
-	if(type == DIAG_EVT_P1_OVR) diagOvrCount++;
-	if(diagNumEvts >= DIAG_MAX_EVTS) return;
-	DiagEvt_t *e = &diagEvts[diagNumEvts++];
-	e->type = type;
-	e->tick = HAL_GetTick() - diagStartTick;
-	e->wrOffset = DCMIPP->P1STM0AR - (uint32_t) CAPTURE_BUF;
-	e->errCode = hdcmipp.ErrorCode;
-	e->csiSr0 = CSI->SR0;
-	e->csiSr1 = CSI->SR1;
-}
-
-void HAL_DCMIPP_PIPE_ErrorCallback(DCMIPP_HandleTypeDef *hdcmipp, uint32_t Pipe)
-{
-	if(Pipe == DCMIPP_PIPE1){
-		diagLog(DIAG_EVT_P1_OVR);
-		/* The HAL turns the overrun interrupt off after the first one; turn it back on so
-		   every overrun is counted (diagnostics only) */
-		if(diagLogging) __HAL_DCMIPP_ENABLE_IT(hdcmipp, DCMIPP_IT_PIPE1_OVR);
-	}
-}
-
-void HAL_DCMIPP_ErrorCallback(DCMIPP_HandleTypeDef *hdcmipp)
-{
-	diagLog(DIAG_EVT_CSI_ERR);
-}
-
-void captureDiagPrepare(void){
-	uint32_t iters;
-	volatile uint32_t *words = (volatile uint32_t *) CAPTURE_BUF;
-	for(iters=0; iters<DIAG_BYTES/4; iters++){
-		words[iters] = DIAG_FILL;
-	}
-	diagNumEvts = 0;
-	diagOvrCount = 0;
-	diagStartTick = HAL_GetTick();
-	diagLogging = 1;
-	hdcmipp.ErrorCode = HAL_DCMIPP_ERROR_NONE;
-	RISAF11->IACR = 0xFFFFFFFF;	//RISAF11 guards the XSPI1 (PSRAM) address window
-	for(iters=0; iters<5; iters++){
-		IAC->ICR[iters] = IAC->ISR[iters];
-	}
-	HAL_UART_Transmit(&huart1, (unsigned char*)("DIAG BUF @"), 10, 100);
-	UARTint((uint32_t) CAPTURE_BUF);
-	UARTreturn();
-}
-
-void captureDiagReport(void){
-	uint32_t iters;
-	uint32_t untouched = 0;
-	volatile uint8_t *buf = (volatile uint8_t *) CAPTURE_BUF;
-
-	diagLogging = 0;
-	/* One line per event: type (1=VSYNC 2=FRAME 3=P1 OVERRUN 4=CSI ERR), ms since start,
-	   bytes written so far in this frame, DCMIPP error code, CSI SR0, CSI SR1 */
-	for(iters=0; iters<diagNumEvts; iters++){
-		HAL_UART_Transmit(&huart1, (unsigned char*)("DIAG EVT "), 9, 100);
-		UARTshort(diagEvts[iters].type, 2);
-		UARTspace();
-		UARTint(diagEvts[iters].tick);
-		UARTspace();
-		UARTint(diagEvts[iters].wrOffset);
-		UARTspace();
-		UARTint(diagEvts[iters].errCode);
-		UARTspace();
-		UARTint(diagEvts[iters].csiSr0);
-		UARTspace();
-		UARTint(diagEvts[iters].csiSr1);
-		UARTreturn();
-	}
-
-	volatile uint32_t *words = (volatile uint32_t *) CAPTURE_BUF;
-	for(iters=0; iters<DIAG_BYTES/4; iters++){
-		if(words[iters] == DIAG_FILL) untouched += 4;
-	}
-	HAL_UART_Transmit(&huart1, (unsigned char*)("DIAG FRAMES "), 12, 100);
-	UARTint(NbMainFrames);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" OVERRUNS "), 10, 100);
-	UARTint(diagOvrCount);
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG UNTOUCHED BYTES "), 23, 100);
-	UARTint(untouched);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" OF "), 4, 100);
-	UARTint(DIAG_BYTES);
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG FIRST BYTES "), 19, 100);
-	for(iters=0; iters<8; iters++){
-		UARTshort(buf[iters], 2);
-		UARTspace();
-	}
-	/* bit0 = AXI transfer error, bit4 = pipe1 overrun */
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG DCMIPP ERR "), 18, 100);
-	UARTint(hdcmipp.ErrorCode);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" CMSR2 "), 7, 100);
-	UARTint(DCMIPP->CMSR2);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" P1PPM0AR1 "), 11, 100);
-	UARTint(DCMIPP->P1PPM0AR1);
-	/* Non-zero IASR = RISAF11 blocked an access to PSRAM; IAESR shows the
-	   offender's CID/secure/priv/read-write bits, IADDR the address */
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG RISAF11 IASR "), 20, 100);
-	UARTint(RISAF11->IASR);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" IAESR "), 7, 100);
-	UARTint(RISAF11->IAR[0].IAESR);
-	HAL_UART_Transmit(&huart1, (unsigned char*)(" IADDR "), 7, 100);
-	UARTint(RISAF11->IAR[0].IADDR);
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG IAC ISR "), 15, 100);
-	for(iters=0; iters<5; iters++){
-		UARTint(IAC->ISR[iters]);
-		UARTspace();
-	}
-	HAL_UART_Transmit(&huart1, (unsigned char*)("\r\nDIAG XSPI1 SR "), 16, 100);
-	UARTint(XSPI1->SR);
-	UARTreturn();
-}
-
-/*********************************************************/
 /* TAKE PIC                                              */
 /*********************************************************/
 void takePic(void){
@@ -3045,8 +2872,7 @@ void takePic(void){
 //			  HAL_UART_Transmit(&huart1, (unsigned char*)("ISP INIT GOOD\r\n"), 15, 100);
 //		  }
 
-	  captureDiagPrepare();	//PSRAM capture debug
-	  if (HAL_DCMIPP_CSI_PIPE_Start(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0 , (uint8_t *) CAPTURE_BUF, DCMIPP_MODE_CONTINUOUS) != HAL_OK)	//DCMIPP_MODE_SNAPSHOT  //DCMIPP_MODE_CONTINUOUS
+	  if (HAL_DCMIPP_CSI_PIPE_Start(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0 , (uint8_t *) Main_DestBuffer, DCMIPP_MODE_CONTINUOUS) != HAL_OK)	//DCMIPP_MODE_SNAPSHOT  //DCMIPP_MODE_CONTINUOUS
 	  {
 		  HAL_UART_Transmit(&huart1, (unsigned char*)("PIPE START FAIL\r\n"), 17, 100);
 		  Error_Handler();
@@ -3073,7 +2899,6 @@ void takePic(void){
 	  /* stop the acquisition */
 	  HAL_DCMIPP_CSI_PIPE_Stop(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0);
 	  HAL_UART_Transmit(&huart1, (unsigned char*)("DONE FRAMES\r\n"), 13, 100);
-	  captureDiagReport();	//PSRAM capture debug
 
 }
 
