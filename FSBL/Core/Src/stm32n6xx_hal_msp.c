@@ -127,14 +127,14 @@ void HAL_DCMIPP_MspInit(DCMIPP_HandleTypeDef* hdcmipp)
     /* DCMIPP clock configuration */
     /* Typical PCLK is 333 MHz so the PLL1 is configured to provide this clock */
     /* Configure DCMIPP clock to IC17 with PLL1  */
-    /* PLL1_VCO Input = HSI_VALUE/PLLM = 64 Mhz / 4 = 16 */
-    /* PLL1_VCO Output = PLL3_VCO Input * PLLN = 16 Mhz * 75 = 1200 */
-    /* PLLLCDCLK = PLL3_VCO Output/(PLLP1 * PLLP2) = 1200/4 = 300Mhz */
-    /* DCMIPP clock frequency = PLLLCDCLK = 300 Mhz */
+    /* PLL1 now runs from HSE: 48 MHz / 4 * 75 = 900 MHz (it was HSI 64 MHz -> 1200 MHz).
+     * DCMIPP needs ~300 MHz to keep up with full-res IMX335 lines; at /4 (225 MHz) pipe1
+     * overran on every sensor line. */
+    /* DCMIPP clock frequency = 900 MHz / 3 = 300 MHz */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_DCMIPP;
     PeriphClkInitStruct.DcmippClockSelection = RCC_DCMIPPCLKSOURCE_IC17;
     PeriphClkInitStruct.ICSelection[RCC_IC17].ClockSelection = RCC_ICCLKSOURCE_PLL1;
-    PeriphClkInitStruct.ICSelection[RCC_IC17].ClockDivider = 4;
+    PeriphClkInitStruct.ICSelection[RCC_IC17].ClockDivider = 3;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
@@ -142,7 +142,7 @@ void HAL_DCMIPP_MspInit(DCMIPP_HandleTypeDef* hdcmipp)
 
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CSI;
     PeriphClkInitStruct.ICSelection[RCC_IC18].ClockSelection = RCC_ICCLKSOURCE_PLL1;
-    PeriphClkInitStruct.ICSelection[RCC_IC18].ClockDivider = 60;
+    PeriphClkInitStruct.ICSelection[RCC_IC18].ClockDivider = 45;	//900 MHz / 45 = 20 MHz, as 1200 / 60 was with HSI
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
@@ -380,8 +380,13 @@ void HAL_XSPI_MspInit(XSPI_HandleTypeDef* hxspi)
 
 	  /** Initializes the peripherals clock
 	  */
+	    /* XSPI1 (PSRAM) gets its own clock so the bus (IC2) can run at full speed for DCMIPP.
+	     * IC3 = PLL1 900MHz / 16 = 56.25MHz, the same PSRAM clock that worked from HCLK with IC2 /8.
+	     * PSRAM also passed with IC2 /6 (75MHz), so IC3 /12 is worth trying once this works. */
 	    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
-	    PeriphClkInitStruct.Xspi1ClockSelection = RCC_XSPI1CLKSOURCE_HCLK;
+	    PeriphClkInitStruct.Xspi1ClockSelection = RCC_XSPI1CLKSOURCE_IC3;
+	    PeriphClkInitStruct.ICSelection[RCC_IC3].ClockSelection = RCC_ICCLKSOURCE_PLL1;
+	    PeriphClkInitStruct.ICSelection[RCC_IC3].ClockDivider = 16;
 	    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
 	    {
 	      Error_Handler();
