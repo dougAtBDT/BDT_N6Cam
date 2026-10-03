@@ -1,0 +1,6 @@
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:56:17:ISP_AWB_GetRB_Ratio	16	static
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:61:13:ISP_AWB_SelectProfiles	32	static
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:115:13:ISP_AWB_ApplyExactProfile	24	static
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:131:13:ISP_AWB_ApplyInterpolatedProfile	136	static
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:176:19:ISP_AWB_Init	24	static
+../Middlewares/ST/STM32_ISP_Library/isp/Src/isp_awb_algo.c:230:20:ISP_AWB_GetConfig	72	static

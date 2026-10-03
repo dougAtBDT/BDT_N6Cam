@@ -1,0 +1,16 @@
+../Drivers/BSP/Components/imx335/imx335.c:336:16:IMX335_WriteTable	4
+../Drivers/BSP/Components/imx335/imx335.c:361:16:IMX335_Delay	2
+../Drivers/BSP/Components/imx335/imx335.c:379:16:IMX335_ReadRegWrap	1
+../Drivers/BSP/Components/imx335/imx335.c:394:16:IMX335_WriteRegWrap	1
+../Drivers/BSP/Components/imx335/imx335.c:413:9:IMX335_RegisterBusIO	3
+../Drivers/BSP/Components/imx335/imx335.c:454:9:IMX335_Init	7
+../Drivers/BSP/Components/imx335/imx335.c:506:9:IMX335_DeInit	2
+../Drivers/BSP/Components/imx335/imx335.c:523:9:IMX335_ReadID	2
+../Drivers/BSP/Components/imx335/imx335.c:551:9:IMX335_GetCapabilities	2
+../Drivers/BSP/Components/imx335/imx335.c:589:9:IMX335_GetSensorInfo	3
+../Drivers/BSP/Components/imx335/imx335.c:624:9:IMX335_SetGain	6
+../Drivers/BSP/Components/imx335/imx335.c:669:9:IMX335_SetExposure	6
+../Drivers/BSP/Components/imx335/imx335.c:722:9:IMX335_SetFrequency	10
+../Drivers/BSP/Components/imx335/imx335.c:770:9:IMX335_SetFramerate	10
+../Drivers/BSP/Components/imx335/imx335.c:817:9:IMX335_MirrorFlipConfig	5
+../Drivers/BSP/Components/imx335/imx335.c:859:9:IMX335_SetTestPattern	5

@@ -1,0 +1,18 @@
+# Build outputs
+/Debug/
+/Release/
+*.o
+*.d
+*.su
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# Toolchain / IDE-specific files
+/.settings/
+/*.launch
+
+# Optional: keep if you want anyone to open the project in CubeMX directly,
+# but ignore backup files if necessary.

@@ -1,0 +1,649 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file         stm32n6xx_hal_msp.c
+  * @brief        This file provides code for the MSP Initialization
+  *               and de-Initialization codes.
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2025 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+/* USER CODE BEGIN Includes */
+//#define USE_HAL_DCMIPP_REGISTER_CALLBACKS 1
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN TD */
+
+/* USER CODE END TD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN Define */
+
+/* USER CODE END Define */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN Macro */
+
+/* USER CODE END Macro */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN PV */
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* External functions --------------------------------------------------------*/
+/* USER CODE BEGIN ExternalFunctions */
+
+/* USER CODE END ExternalFunctions */
+
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+/**
+  * Initializes the Global MSP.
+  */
+void HAL_MspInit(void)
+{
+
+  /* USER CODE BEGIN MspInit 0 */
+
+  /* USER CODE END MspInit 0 */
+
+  /* System interrupt init*/
+
+  HAL_PWREx_EnableVddIO2();
+
+  HAL_PWREx_EnableVddIO3();
+
+  HAL_PWREx_EnableVddIO4();
+
+  HAL_PWREx_EnableVddIO5();
+
+  /* USER CODE BEGIN MspInit 1 */
+
+  /* USER CODE END MspInit 1 */
+}
+
+/**
+  * @brief DCMIPP MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hdcmipp: DCMIPP handle pointer
+  * @retval None
+  */
+void HAL_DCMIPP_MspInit(DCMIPP_HandleTypeDef* hdcmipp)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  if(hdcmipp->Instance==DCMIPP)
+  {
+    /* USER CODE BEGIN DCMIPP_MspInit 0 */
+
+	    /* Peripheral clock enable */
+	    __HAL_RCC_DCMIPP_CLK_ENABLE();
+
+	    __HAL_RCC_DCMIPP_FORCE_RESET();
+	    __HAL_RCC_DCMIPP_RELEASE_RESET();
+
+    /* USER CODE END DCMIPP_MspInit 0 */
+
+
+    /* USER CODE BEGIN DCMIPP_MspInit 1 */
+
+    /*** Configure the NVIC for DCMIPP ***/
+    /* NVIC configuration for DCMIPP transfer complete interrupt */
+    HAL_NVIC_SetPriority(DCMIPP_IRQn, 0x07, 0);
+    HAL_NVIC_EnableIRQ(DCMIPP_IRQn);
+
+    /*** Enable peripheral clock ***/
+    /* Enable CSI clock */
+    __HAL_RCC_CSI_CLK_ENABLE();
+
+    __HAL_RCC_CSI_FORCE_RESET();
+    __HAL_RCC_CSI_RELEASE_RESET();
+
+    /*** Configure the NVIC for CSI ***/
+    /* NVIC configuration for CSI transfer complete interrupt */
+    HAL_NVIC_SetPriority(CSI_IRQn, 0x07, 0);
+    HAL_NVIC_EnableIRQ(CSI_IRQn);
+
+    /* DCMIPP Clock Config */
+    /* DCMIPP clock configuration */
+    /* Typical PCLK is 333 MHz so the PLL1 is configured to provide this clock */
+    /* Configure DCMIPP clock to IC17 with PLL1  */
+    /* PLL1_VCO Input = HSI_VALUE/PLLM = 64 Mhz / 4 = 16 */
+    /* PLL1_VCO Output = PLL3_VCO Input * PLLN = 16 Mhz * 75 = 1200 */
+    /* PLLLCDCLK = PLL3_VCO Output/(PLLP1 * PLLP2) = 1200/4 = 300Mhz */
+    /* DCMIPP clock frequency = PLLLCDCLK = 300 Mhz */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_DCMIPP;
+    PeriphClkInitStruct.DcmippClockSelection = RCC_DCMIPPCLKSOURCE_IC17;
+    PeriphClkInitStruct.ICSelection[RCC_IC17].ClockSelection = RCC_ICCLKSOURCE_PLL1;
+    PeriphClkInitStruct.ICSelection[RCC_IC17].ClockDivider = 6;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CSI;
+    PeriphClkInitStruct.ICSelection[RCC_IC18].ClockSelection = RCC_ICCLKSOURCE_PLL1;
+    PeriphClkInitStruct.ICSelection[RCC_IC18].ClockDivider = 64;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* IMX335 Sensor HW Reset */
+    /* Enable GPIO clocks */
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    GPIO_InitTypeDef gpio_init_structure = {0};
+
+    /* Initialize camera NRST pin */
+    gpio_init_structure.Pin       = GPIO_PIN_8;
+    gpio_init_structure.Pull      = GPIO_NOPULL;
+    gpio_init_structure.Mode      = GPIO_MODE_OUTPUT_PP;
+    gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(GPIOC, &gpio_init_structure);
+
+    /* Initialize camera EN pin */
+    gpio_init_structure.Pin       = GPIO_PIN_2;
+    gpio_init_structure.Pull      = GPIO_NOPULL;
+    gpio_init_structure.Mode      = GPIO_MODE_OUTPUT_PP;
+    gpio_init_structure.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    HAL_GPIO_Init(GPIOD, &gpio_init_structure);
+
+    /* Camera sensor Power-On sequence */
+    /* Assert the camera Enable and NRST pins */
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, GPIO_PIN_RESET);
+    HAL_Delay(200);   /* NRST and Enable signals asserted during 200ms */
+
+    /* De-assert the camera STANDBY pin (active high) */
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, GPIO_PIN_SET);
+    HAL_Delay(3);     /* NRST de-asserted during 3ms */
+
+
+    /* USER CODE END DCMIPP_MspInit 1 */
+
+  }
+
+}
+
+/**
+  * @brief DCMIPP MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hdcmipp: DCMIPP handle pointer
+  * @retval None
+  */
+//void HAL_DCMIPP_MspDeInit(DCMIPP_HandleTypeDef* hdcmipp)
+//{
+//  if(hdcmipp->Instance==DCMIPP)
+//  {
+    /* USER CODE BEGIN DCMIPP_MspDeInit 0 */
+
+    /* USER CODE END DCMIPP_MspDeInit 0 */
+    /* Peripheral clock disable */
+//    __HAL_RCC_CSI_CLK_DISABLE();
+//    __HAL_RCC_CSI_FORCE_RESET();
+//    __HAL_RCC_CSI_RELEASE_RESET();
+    /* USER CODE BEGIN DCMIPP_MspDeInit 1 */
+
+    /* USER CODE END DCMIPP_MspDeInit 1 */
+//  }
+
+//}
+
+/**
+  * @brief I2C MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hi2c: I2C handle pointer
+  * @retval None
+  */
+void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  if(hi2c->Instance==I2C1)
+  {
+    /* USER CODE BEGIN I2C1_MspInit 0 */
+
+    /* USER CODE END I2C1_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
+    PeriphClkInitStruct.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOH_CLK_ENABLE();
+    /**I2C1 GPIO Configuration
+    PC1     ------> I2C1_SDA
+    PH9     ------> I2C1_SCL
+    */
+    GPIO_InitStruct.Pin = I2C1_SDA_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+    HAL_GPIO_Init(I2C1_SDA_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = I2C1_SCL_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+    HAL_GPIO_Init(I2C1_SCL_GPIO_Port, &GPIO_InitStruct);
+
+    /* Peripheral clock enable */
+    __HAL_RCC_I2C1_CLK_ENABLE();
+    /* USER CODE BEGIN I2C1_MspInit 1 */
+
+    /* USER CODE END I2C1_MspInit 1 */
+
+  }
+
+}
+
+/**
+  * @brief I2C MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hi2c: I2C handle pointer
+  * @retval None
+  */
+void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
+{
+  if(hi2c->Instance==I2C1)
+  {
+    /* USER CODE BEGIN I2C1_MspDeInit 0 */
+
+    /* USER CODE END I2C1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_I2C1_CLK_DISABLE();
+
+    /**I2C1 GPIO Configuration
+    PC1     ------> I2C1_SDA
+    PH9     ------> I2C1_SCL
+    */
+    HAL_GPIO_DeInit(I2C1_SDA_GPIO_Port, I2C1_SDA_Pin);
+
+    HAL_GPIO_DeInit(I2C1_SCL_GPIO_Port, I2C1_SCL_Pin);
+
+    /* USER CODE BEGIN I2C1_MspDeInit 1 */
+
+    /* USER CODE END I2C1_MspDeInit 1 */
+  }
+
+}
+
+/**
+  * @brief UART MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param huart: UART handle pointer
+  * @retval None
+  */
+void HAL_UART_MspInit(UART_HandleTypeDef* huart)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  if(huart->Instance==USART3)
+  {
+    /* USER CODE BEGIN USART3_MspInit 0 */
+
+    /* USER CODE END USART3_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART3;
+    PeriphClkInitStruct.Usart3ClockSelection = RCC_USART3CLKSOURCE_PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    __HAL_RCC_USART3_CLK_ENABLE();
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    /**USART3 GPIO Configuration
+    PB11     ------> USART3_RX
+    PB10     ------> USART3_TX
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART3;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN USART3_MspInit 1 */
+
+    /* USER CODE END USART3_MspInit 1 */
+  }
+  else if(huart->Instance==USART10)
+  {
+    /* USER CODE BEGIN USART10_MspInit 0 */
+
+    /* USER CODE END USART10_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART10;
+    PeriphClkInitStruct.Usart10ClockSelection = RCC_USART10CLKSOURCE_PCLK2;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    __HAL_RCC_USART10_CLK_ENABLE();
+
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    /**USART10 GPIO Configuration
+    PD15     ------> USART10_TX
+    PD14     ------> USART10_RX
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_15|GPIO_PIN_14;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF6_USART10;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN USART10_MspInit 1 */
+
+    /* USER CODE END USART10_MspInit 1 */
+  }
+
+}
+
+/**
+  * @brief UART MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param huart: UART handle pointer
+  * @retval None
+  */
+void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
+{
+  if(huart->Instance==USART3)
+  {
+    /* USER CODE BEGIN USART3_MspDeInit 0 */
+
+    /* USER CODE END USART3_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_USART3_CLK_DISABLE();
+
+    /**USART3 GPIO Configuration
+    PB11     ------> USART3_RX
+    PB10     ------> USART3_TX
+    */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_11|GPIO_PIN_10);
+
+    /* USER CODE BEGIN USART3_MspDeInit 1 */
+
+    /* USER CODE END USART3_MspDeInit 1 */
+  }
+  else if(huart->Instance==USART10)
+  {
+    /* USER CODE BEGIN USART10_MspDeInit 0 */
+
+    /* USER CODE END USART10_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_USART10_CLK_DISABLE();
+
+    /**USART10 GPIO Configuration
+    PD15     ------> USART10_TX
+    PD14     ------> USART10_RX
+    */
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_15|GPIO_PIN_14);
+
+    /* USER CODE BEGIN USART10_MspDeInit 1 */
+
+    /* USER CODE END USART10_MspDeInit 1 */
+  }
+
+}
+
+static uint32_t HAL_RCC_XSPIM_CLK_ENABLED=0;
+
+/**
+  * @brief XSPI MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hxspi: XSPI handle pointer
+  * @retval None
+  */
+void HAL_XSPI_MspInit(XSPI_HandleTypeDef* hxspi)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+  if(hxspi->Instance==XSPI1)
+  {
+    /* USER CODE BEGIN XSPI1_MspInit 0 */
+
+    /* USER CODE END XSPI1_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
+    PeriphClkInitStruct.Xspi1ClockSelection = RCC_XSPI1CLKSOURCE_HCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    HAL_RCC_XSPIM_CLK_ENABLED++;
+    if(HAL_RCC_XSPIM_CLK_ENABLED==1){
+      __HAL_RCC_XSPIM_CLK_ENABLE();
+    }
+    __HAL_RCC_XSPI1_CLK_ENABLE();
+
+    __HAL_RCC_GPIOP_CLK_ENABLE();
+    __HAL_RCC_GPIOO_CLK_ENABLE();
+    /**XSPI1 GPIO Configuration
+    PP7     ------> XSPIM_P1_IO7
+    PP6     ------> XSPIM_P1_IO6
+    PP0     ------> XSPIM_P1_IO0
+    PP4     ------> XSPIM_P1_IO4
+    PP1     ------> XSPIM_P1_IO1
+    PP15     ------> XSPIM_P1_IO15
+    PP5     ------> XSPIM_P1_IO5
+    PP12     ------> XSPIM_P1_IO12
+    PP3     ------> XSPIM_P1_IO3
+    PP2     ------> XSPIM_P1_IO2
+    PP13     ------> XSPIM_P1_IO13
+    PO2     ------> XSPIM_P1_DQS0
+    PP11     ------> XSPIM_P1_IO11
+    PP8     ------> XSPIM_P1_IO8
+    PP14     ------> XSPIM_P1_IO14
+    PO3     ------> XSPIM_P1_DQS1
+    PO0     ------> XSPIM_P1_NCS1
+    PP9     ------> XSPIM_P1_IO9
+    PP10     ------> XSPIM_P1_IO10
+    PO4     ------> XSPIM_P1_CLK
+    */
+    GPIO_InitStruct.Pin = HEXASPI_IO_7_Pin|HEXASPI_IO_6_Pin|HEXASPI_IO_0_Pin|HEXASPI_IO_4_Pin
+                          |HEXASPI_IO_1_Pin|HEXASPI_IO_15_Pin|HEXASPI_IO_5_Pin|HEXASPI_IO_12_Pin
+                          |HEXASPI_IO_3_Pin|HEXASPI_IO_2_Pin|HEXASPI_IO_13_Pin|HEXASPI_IO_11_Pin
+                          |HEXASPI_IO_8_Pin|HEXASPI_IO_14_Pin|HEXASPI_IO_9_Pin|HEXASPI_IO_10_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_XSPIM_P1;
+    HAL_GPIO_Init(GPIOP, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = HEXASPI_DQS0_Pin|HEXASPI_DQS1_Pin|HEXASPI_NCS_Pin|HEXASPI_CLK_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_XSPIM_P1;
+    HAL_GPIO_Init(GPIOO, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN XSPI1_MspInit 1 */
+
+    /* USER CODE END XSPI1_MspInit 1 */
+  }
+  else if(hxspi->Instance==XSPI2)
+  {
+    /* USER CODE BEGIN XSPI2_MspInit 0 */
+
+    /* USER CODE END XSPI2_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_XSPI2;
+    PeriphClkInitStruct.Xspi2ClockSelection = RCC_XSPI2CLKSOURCE_HCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Peripheral clock enable */
+    HAL_RCC_XSPIM_CLK_ENABLED++;
+    if(HAL_RCC_XSPIM_CLK_ENABLED==1){
+      __HAL_RCC_XSPIM_CLK_ENABLE();
+    }
+    __HAL_RCC_XSPI2_CLK_ENABLE();
+
+    __HAL_RCC_GPION_CLK_ENABLE();
+    /**XSPI2 GPIO Configuration
+    PN4     ------> XSPIM_P2_IO2
+    PN6     ------> XSPIM_P2_CLK
+    PN8     ------> XSPIM_P2_IO4
+    PN0     ------> XSPIM_P2_DQS0
+    PN3     ------> XSPIM_P2_IO1
+    PN5     ------> XSPIM_P2_IO3
+    PN1     ------> XSPIM_P2_NCS1
+    PN9     ------> XSPIM_P2_IO5
+    PN2     ------> XSPIM_P2_IO0
+    PN10     ------> XSPIM_P2_IO6
+    PN11     ------> XSPIM_P2_IO7
+    */
+    GPIO_InitStruct.Pin = OCTOSPI_IO2_Pin|GPIO_PIN_6|OCTOSPI_IO4_Pin|OCTOSPI_DQS_Pin
+                          |OCTOSPI_IO1_Pin|OCTOSPI_IO3_Pin|OCTOSPI_NCS_Pin|OCTOSPI_IO5_Pin
+                          |OCTOSPI_IO0_Pin|OCTOSPI_IO6_Pin|OCTOSPI_IO7_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF9_XSPIM_P2;
+    HAL_GPIO_Init(GPION, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN XSPI2_MspInit 1 */
+
+    /* USER CODE END XSPI2_MspInit 1 */
+  }
+
+}
+
+/**
+  * @brief XSPI MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hxspi: XSPI handle pointer
+  * @retval None
+  */
+void HAL_XSPI_MspDeInit(XSPI_HandleTypeDef* hxspi)
+{
+  if(hxspi->Instance==XSPI1)
+  {
+    /* USER CODE BEGIN XSPI1_MspDeInit 0 */
+
+    /* USER CODE END XSPI1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    HAL_RCC_XSPIM_CLK_ENABLED--;
+    if(HAL_RCC_XSPIM_CLK_ENABLED==0){
+      __HAL_RCC_XSPIM_CLK_DISABLE();
+    }
+    __HAL_RCC_XSPI1_CLK_DISABLE();
+
+    /**XSPI1 GPIO Configuration
+    PP7     ------> XSPIM_P1_IO7
+    PP6     ------> XSPIM_P1_IO6
+    PP0     ------> XSPIM_P1_IO0
+    PP4     ------> XSPIM_P1_IO4
+    PP1     ------> XSPIM_P1_IO1
+    PP15     ------> XSPIM_P1_IO15
+    PP5     ------> XSPIM_P1_IO5
+    PP12     ------> XSPIM_P1_IO12
+    PP3     ------> XSPIM_P1_IO3
+    PP2     ------> XSPIM_P1_IO2
+    PP13     ------> XSPIM_P1_IO13
+    PO2     ------> XSPIM_P1_DQS0
+    PP11     ------> XSPIM_P1_IO11
+    PP8     ------> XSPIM_P1_IO8
+    PP14     ------> XSPIM_P1_IO14
+    PO3     ------> XSPIM_P1_DQS1
+    PO0     ------> XSPIM_P1_NCS1
+    PP9     ------> XSPIM_P1_IO9
+    PP10     ------> XSPIM_P1_IO10
+    PO4     ------> XSPIM_P1_CLK
+    */
+    HAL_GPIO_DeInit(GPIOP, HEXASPI_IO_7_Pin|HEXASPI_IO_6_Pin|HEXASPI_IO_0_Pin|HEXASPI_IO_4_Pin
+                          |HEXASPI_IO_1_Pin|HEXASPI_IO_15_Pin|HEXASPI_IO_5_Pin|HEXASPI_IO_12_Pin
+                          |HEXASPI_IO_3_Pin|HEXASPI_IO_2_Pin|HEXASPI_IO_13_Pin|HEXASPI_IO_11_Pin
+                          |HEXASPI_IO_8_Pin|HEXASPI_IO_14_Pin|HEXASPI_IO_9_Pin|HEXASPI_IO_10_Pin);
+
+    HAL_GPIO_DeInit(GPIOO, HEXASPI_DQS0_Pin|HEXASPI_DQS1_Pin|HEXASPI_NCS_Pin|HEXASPI_CLK_Pin);
+
+    /* USER CODE BEGIN XSPI1_MspDeInit 1 */
+
+    /* USER CODE END XSPI1_MspDeInit 1 */
+  }
+  else if(hxspi->Instance==XSPI2)
+  {
+    /* USER CODE BEGIN XSPI2_MspDeInit 0 */
+
+    /* USER CODE END XSPI2_MspDeInit 0 */
+    /* Peripheral clock disable */
+    HAL_RCC_XSPIM_CLK_ENABLED--;
+    if(HAL_RCC_XSPIM_CLK_ENABLED==0){
+      __HAL_RCC_XSPIM_CLK_DISABLE();
+    }
+    __HAL_RCC_XSPI2_CLK_DISABLE();
+
+    /**XSPI2 GPIO Configuration
+    PN4     ------> XSPIM_P2_IO2
+    PN6     ------> XSPIM_P2_CLK
+    PN8     ------> XSPIM_P2_IO4
+    PN0     ------> XSPIM_P2_DQS0
+    PN3     ------> XSPIM_P2_IO1
+    PN5     ------> XSPIM_P2_IO3
+    PN1     ------> XSPIM_P2_NCS1
+    PN9     ------> XSPIM_P2_IO5
+    PN2     ------> XSPIM_P2_IO0
+    PN10     ------> XSPIM_P2_IO6
+    PN11     ------> XSPIM_P2_IO7
+    */
+    HAL_GPIO_DeInit(GPION, OCTOSPI_IO2_Pin|GPIO_PIN_6|OCTOSPI_IO4_Pin|OCTOSPI_DQS_Pin
+                          |OCTOSPI_IO1_Pin|OCTOSPI_IO3_Pin|OCTOSPI_NCS_Pin|OCTOSPI_IO5_Pin
+                          |OCTOSPI_IO0_Pin|OCTOSPI_IO6_Pin|OCTOSPI_IO7_Pin);
+
+    /* USER CODE BEGIN XSPI2_MspDeInit 1 */
+
+    /* USER CODE END XSPI2_MspDeInit 1 */
+  }
+
+}
+
+/* USER CODE BEGIN 1 */
+
+/* USER CODE END 1 */
