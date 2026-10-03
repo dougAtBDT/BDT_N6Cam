@@ -1,6 +1,6 @@
 # Build outputs
-Debug/
-Release/
+FSBL/Debug/
+FSBL/Release/
 *.o
 *.d
 *.su
