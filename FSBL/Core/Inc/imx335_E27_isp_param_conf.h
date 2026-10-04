@@ -86,6 +86,10 @@ static const ISP_IQParamTypeDef ISP_IQParamCacheInit_IMX335 = {	//from
 	            { { 0, 0, 0, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	            { { 0, 0, 0, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	        },
+	        /* Required by ISP library >= 1.3 (AWB fails with ISP_ERR_AWB if left 0). Not from a
+	         * tuning run: derived from the gains above as the raw R:G:B of a grey patch,
+	         * R = 128 / gainR, G = 128, B = 128 / gainB. R/B must decrease from profile to profile. */
+	        .referenceRGB = { { 93, 128, 45, }, { 70, 128, 60, }, { 52, 128, 90, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	    },
 	    .contrast = {
 	        .enable = 0,
@@ -176,6 +180,10 @@ static const ISP_IQParamTypeDef ISP_IQParamCacheInit_IMX335_2400_1600 = {	//from
 	            { { 0, 0, 0, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	            { { 0, 0, 0, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	        },
+	        /* Required by ISP library >= 1.3 (AWB fails with ISP_ERR_AWB if left 0). Not from a
+	         * tuning run: derived from the gains above as the raw R:G:B of a grey patch,
+	         * R = 128 / gainR, G = 128, B = 128 / gainB. R/B must decrease from profile to profile. */
+	        .referenceRGB = { { 93, 128, 45, }, { 70, 128, 60, }, { 52, 128, 90, }, { 0, 0, 0, }, { 0, 0, 0, }, },
 	    },
 	    .contrast = {
 	        .enable = 0,

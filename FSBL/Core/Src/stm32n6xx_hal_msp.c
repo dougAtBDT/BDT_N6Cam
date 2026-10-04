@@ -65,6 +65,11 @@ void HAL_MspInit(void)
 
   /* USER CODE BEGIN MspInit 0 */
 	  HAL_PWREx_EnableVddIO2();
+	  /* VDDIO2 (ports O/P: XSPI1 to the PSRAM) is 1.8V on this board. Select the 1.8V I/O range
+	   * as ST does for the APS256 on the N6570-DK; the 3.3V default weakens the pads at speed.
+	   * Only takes effect if the HSLV_VDDIO2 OTP option bit is programmed.
+	   * Never select this range if VDDIO2 is 3.3V: that damages the device. */
+	  HAL_PWREx_ConfigVddIORange(PWR_VDDIO2, PWR_VDDIO_RANGE_1V8);
 
 	  HAL_PWREx_EnableVddIO3();
 
@@ -381,12 +386,14 @@ void HAL_XSPI_MspInit(XSPI_HandleTypeDef* hxspi)
 	  /** Initializes the peripherals clock
 	  */
 	    /* XSPI1 (PSRAM) gets its own clock so the bus (IC2) can run at full speed for DCMIPP.
-	     * IC3 = PLL1 900MHz / 16 = 56.25MHz, the same PSRAM clock that worked from HCLK with IC2 /8.
-	     * PSRAM also passed with IC2 /6 (75MHz), so IC3 /12 is worth trying once this works. */
+	     * IC3 = PLL1 900MHz / 12 = 75MHz. At /16 (56.25MHz) PSRAM could not drain a 2400-wide
+	     * line fast enough and pipe1 overran on nearly every line; at /10 (90MHz) this board's
+	     * PSRAM failed the exhaustive test.
+	     * If this changes, recalculate hxspi1.Init.Refresh in MX_XSPI1_Init (main.c). */
 	    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_XSPI1;
 	    PeriphClkInitStruct.Xspi1ClockSelection = RCC_XSPI1CLKSOURCE_IC3;
 	    PeriphClkInitStruct.ICSelection[RCC_IC3].ClockSelection = RCC_ICCLKSOURCE_PLL1;
-	    PeriphClkInitStruct.ICSelection[RCC_IC3].ClockDivider = 16;
+	    PeriphClkInitStruct.ICSelection[RCC_IC3].ClockDivider = 12;
 	    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
 	    {
 	      Error_Handler();
