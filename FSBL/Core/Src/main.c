@@ -34,8 +34,16 @@
 //#define SEND_3GRAYS
 
 //#define RESOLUTION_LCD	//640*480*3=384,400.
-//#define RESOLUTION_1200_800	//1200x800x3=2,880,000.  IMX355 MAX = 2582 X 1944. Should be able get more than 1200x800 if can stream to external RAM.
 #define RESOLUTION_2400_1600	//2400x1600x3=11,520,000.  IMX355 MAX = 2582 X 1944 x 3 = 15,058,224. Should be able get more than 1200x800 if can stream to external RAM.
+
+/* Uncomment to make the IMX335 output a built-in test pattern instead of the scene, to check
+ * the whole sensor -> DCMIPP/ISP -> PSRAM -> UART path. On this board 11 gives horizontal
+ * colour bars, despite the driver's comment (see IMX335_SetTestPattern for the others). */
+//#define CAM_TEST_PATTERN 11
+/* Uncomment for capture checks around takePic(): fills the buffer with 0x5A first, then
+ * prints overruns, ISP errors, unwritten / 0xFF runs and colour edges on UART1.
+ * Adds a few seconds per capture. */
+//#define CAPTURE_CHECKS
 
 #define ISP_OK 0	//I don't know why the compiler can't find this enum in isp_core.h
 #define EE_I2C_DELAY (20)
@@ -95,26 +103,7 @@ __attribute__ ((section(".buffRam")))
 __attribute__ ((aligned (32)))
 uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
 #endif
-#ifdef RESOLUTION_1200_800	//	640*480*3=921,600
-#define MAX_PREVIEW_BUFFER_WIDTH    640	//640
-#define MAX_PREVIEW_BUFFER_HEIGHT   480
-/* Allocate the Main_DestBuffer (RGB888) in SRAM dedicated region */
-//__attribute__ ((section(".buffRam")))
-__attribute__ ((section(".psram_bss")))
-__attribute__ ((aligned (32)))
-//uint8_t Main_DestBuffer[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT * 3];	//921,600 Bytes of 4.2MBytes on N6
-//uint8_t Main_DestBuffer[640 * 480 * 3];	//1200x800x3=2,880,000.  Need to deal with image size at end of ISP_IQParamTypeDef.  IMX355 MAX = 2582 X 1944. Should be able get more than 1200x800 if can DMA to external RAM.
 
-#ifdef SEND_3GRAYS
-__attribute__ ((section(".buffRam")))
-__attribute__ ((aligned (32)))
-uint8_t grayscale_A[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
-
-__attribute__ ((section(".buffRam")))
-__attribute__ ((aligned (32)))
-uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
-#endif //three grayscales
-#endif
 #ifdef RESOLUTION_2400_1600	//	2400*1600*3 = 11,520,000
 /* Image width: at 2400 (7200 bytes per line) PSRAM must empty each line before the next one;
  * at 75MHz without the HSLV fuse it fell a few hundred pixels short. 1920 (5760 bytes per
@@ -125,6 +114,7 @@ uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
 #define IMAGE_WIDTH    2400	//1920 if PSRAM can't keep up
 #define IMAGE_HEIGHT   1600
 #define IMAGE_PACKETS  (IMAGE_WIDTH * IMAGE_HEIGHT * 3 / 1200)	//1200-byte UART packets per image
+
 _Static_assert((IMAGE_WIDTH * 3) % 16 == 0, "DCMIPP pitch must be a multiple of 16 bytes");
 _Static_assert((IMAGE_WIDTH * IMAGE_HEIGHT * 3) % 9600 == 0, "image must split into 8 bars of 1200-byte packets");
 _Static_assert(IMAGE_WIDTH <= 2592 && IMAGE_HEIGHT <= 1944, "crop larger than the IMX335 sensor");
@@ -136,14 +126,7 @@ _Static_assert(IMAGE_WIDTH <= 2592 && IMAGE_HEIGHT <= 1944, "crop larger than th
 //__attribute__ ((section(".buffRam")))
 __attribute__ ((section(".psram_bss")))
 __attribute__ ((aligned (32)))
-uint8_t Main_DestBuffer[IMAGE_WIDTH * IMAGE_HEIGHT * 3];	//2400*1600*3 = 11,520,000.  Need to deal with image size at end of ISP_IQParamTypeDef.  IMX355 MAX = 2582 X 1944.
-__attribute__ ((section(".buffRam")))
-__attribute__ ((aligned (32)))
-uint8_t grayscale_A[IMAGE_WIDTH * IMAGE_HEIGHT];
-
-__attribute__ ((section(".buffRam")))
-__attribute__ ((aligned (32)))
-uint8_t grayscale_B[IMAGE_WIDTH * IMAGE_HEIGHT];
+uint8_t Main_DestBuffer[IMAGE_WIDTH * IMAGE_HEIGHT * 3];	//2400*1600*3 = 11,520,000.  Need to deal with image analysis size at end of ISP_IQParamTypeDef.  IMX355 MAX = 2582 X 1944.
 
 #ifdef SEND_3GRAYS
 __attribute__ ((section(".buffRam")))
@@ -156,18 +139,10 @@ uint8_t grayscale_B[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
 #endif //three grayscales
 #endif
 
-//__attribute__ ((section(".buffRam")))
-//__attribute__ ((aligned (32)))
-//uint8_t grayscale_C[MAX_PREVIEW_BUFFER_WIDTH * MAX_PREVIEW_BUFFER_HEIGHT];
-
 #ifndef CAM_LINE_SCALE
 #define CAM_LINE_SCALE 1	//normal sensor line timing
 #endif
-#define IMX335_REG_HMAX 0x3034	//line length, 16 bit (not in the ST driver's register list)
-/* Uncomment to make the IMX335 output a built-in test pattern instead of the scene, to check
- * the whole sensor -> DCMIPP/ISP -> PSRAM -> UART path. 10 = horizontal colour bars,
- * 11 = vertical colour bars (see IMX335_SetTestPattern for the others). */
-#define CAM_TEST_PATTERN 11
+#define IMX335_REG_HMAX 0x3034	//12340  line length, 16 bit (not in the ST driver's register list)
 
 #define USE_HAL_DCMIPP_REGISTER_CALLBACKS 1
 
@@ -185,7 +160,6 @@ static void MX_USB1_OTG_HS_PCD_Init(void);
 static void MX_XSPI2_Init(void);	//Macronix Flash
 static void MX_XSPI1_Init(void);	//AP Memeory PSRAM
 /* USER CODE BEGIN PFP */
-//ISP_HandleTypeDef  hcamera_isp;	//from Snapshot
 XSPI_MemoryMappedTypeDef sMemMappedCfg;
 
 void ledBlink (uint8_t);
@@ -308,41 +282,6 @@ int main(void)
 //  uint32_t pclk5Freq = LL_RCC_CALC_PCLK5_FREQ(LL_RCC_CALC_HCLK_FREQ(HAL_RCC_GetSysClockFreq(), LL_RCC_GetAHBPrescaler()),
 //                                  LL_RCC_GetAPB1Prescaler());
 
-#ifdef RESOLUTION_1200_800
-  /* <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
- // this setup is included in code
- void nsDelay(uint32_t ns) {
-  volatile uint32_t count = ns / 1.25; // 1.25 for 800mhz MCU clock
-  while (count--) {
-  __NOP(); // 1 cycle (~1ns on 100MHz+ CPU)
-  }
- }
-  /* Unlock RAMCFG write protection */
-	RAMCFG_SRAM3_AXI_NS->ERKEYR = 0xCA;
-	RAMCFG_SRAM3_AXI_NS->ERKEYR = 0x53;
-
-	/* Enable RAMCFG clock */
-	__HAL_RCC_RAMCFG_CLK_ENABLE();
-
-	/* Enable individual AXI SRAM memory clocks */
-	__HAL_RCC_AXISRAM3_MEM_CLK_ENABLE();
-	__HAL_RCC_AXISRAM4_MEM_CLK_ENABLE();
-	__HAL_RCC_AXISRAM5_MEM_CLK_ENABLE();
-	__HAL_RCC_AXISRAM6_MEM_CLK_ENABLE();
-
-	nsDelay(50); // Provide adequate stabilization delay
-
-	/* Disable the Shutdown mode (SRAMSD) to power up the RAMs */
-	/* Note: Use _S instead of _NS if your application is running in Secure Mode */
-	RAMCFG_SRAM3_AXI_NS->CR &= ~RAMCFG_CR_SRAMSD;
-	RAMCFG_SRAM4_AXI_NS->CR &= ~RAMCFG_CR_SRAMSD;
-	RAMCFG_SRAM5_AXI_NS->CR &= ~RAMCFG_CR_SRAMSD;
-	RAMCFG_SRAM6_AXI_NS->CR &= ~RAMCFG_CR_SRAMSD;
-
-	/* Insert barriers to ensure configuration takes effect before access */
-	__DSB();
-	__ISB();
-#endif
   /* USER CODE END SysInit */
 
   MX_GPIO_Init();
@@ -379,27 +318,10 @@ int main(void)
 
   psramInitFrmMX();
 
-  if(psramTest(1,0)==0){
+  if(psramTest(0,0)==0){
 	  Error_Handler();	//1=Exhaustive, 0=first time through this test
   }
-  if(psramTest(1,1)==0){
-	  Error_Handler();	//1=Exhaustive, 0=first time through this test
-  }
-  if(psramTest(1,1)==0){
-	  Error_Handler();	//1=Exhaustive, 0=first time through this test
-  }
-  psramAddrTest((uint32_t *) Main_DestBuffer, sizeof(Main_DestBuffer));	//needs memory-mapped mode (psramTest(x,0) above)
-/*  for(iters=0;iters<30;iters++){
-	  if(psramTest(0,1)==0){
-		  Error_Handler();	//1=Exhaustive
-	  }
-  }*/
-//  stm_xspi_psram_test(1);
-
-//  clearDestBuff();
-//  clearDumpBuff();
-//  printDestBuff();
-
+//  psramAddrTest((uint32_t *) Main_DestBuffer, sizeof(Main_DestBuffer));	//needs memory-mapped mode (psramTest(x,0) above)
 
   /* USER CODE END WHILE */
 
@@ -420,7 +342,6 @@ int main(void)
   als = getALSfromTinyAPDS(0xA4);   //from Python March 2025: need a throw-away read with 40+ms between the two after having read temperature/humidity. Have no idea why.
   UARTshort(als,4);
   UARTreturn();
-
   /* The ALS bit-bang read reconfigures PC1/PH9 (shared with the camera I2C1) as plain GPIO.
    * Re-init I2C1 to restore the AF4 open-drain pins and reset the peripheral, otherwise
    * every IMX335 register write after this point fails (ISP_ERR_ALGO in AEC init). */
@@ -429,7 +350,6 @@ int main(void)
   {
     Error_Handler();
   }
-
 
   /* Fill init struct with Camera driver helpers */
   appliHelpers.GetSensorInfo = GetSensorInfoHelper;			//from Snapshot
@@ -477,11 +397,8 @@ int main(void)
   }else{
 	  HAL_UART_Transmit(&huart1, (unsigned char*)("ISP START GOOD\r\n"), 16, 100);
   }
-/*********************************************************************************************************************/
 
-
-/*********************************************************************************************************************/
- /* give the ISP 60 frames to set color balance */
+  /* give the ISP 60 frames to set color balance */
   if((als<4)||(als==0xFF)){	//If dark then use rodentCam settings with no auto gain or exposure
 	  HAL_GPIO_WritePin(CAM_FLASH_GPIO_Port, CAM_FLASH_Pin, GPIO_PIN_SET);	//Flash Vreg ON
 	  delayForAuto=2;
@@ -539,7 +456,7 @@ int main(void)
 //		sendColorBars();
 //		storeColorBars();//IF STORING AND SENDING COLORBARS, NEED TO ADD A DELAY IMMEDIATELY BEFORE RECEIVETOIDLE_DMA on SysCntler: 	HAL_Delay(1200);//NEEDED WHEN STORING AND SENDING COLORBARS.  1000 WAS NOT ENOUGH. 1400 ALSO WORKED.
 
-		#ifdef SEND_3GRAYS
+#ifdef SEND_3GRAYS
 		send3Grays();
 #else
 		sendPic();
@@ -796,10 +713,10 @@ static void MX_DCMIPP_Init(void)
   }
 
   /* RGB888 is stored B,G,R in memory by default; the receiver expects R,G,B */
-  if (HAL_DCMIPP_PIPE_EnableRedBlueSwap(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+//  if (HAL_DCMIPP_PIPE_EnableRedBlueSwap(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
 
 #ifdef RESOLUTION_2400_1600
   /* Full resolution: crop the centre 2400x1600 of the 2592x1944 sensor, no downsize */
@@ -1880,20 +1797,12 @@ if(firstTime==0){	//this fails if run psramTest more than once
 /***********************************************************************/
 void sendPic(void){
 	#define CRC_SIZE 1200
-	uint32_t iters, packIters, imgIters;
+	uint32_t iters, packIters;
 	uint8_t picPacket[1212];	//1208 for preambles, 1212 for preambles plus CRCs and pack#s.
 	uint16_t crcrc;
 	uint8_t* destBufferPtr = Main_DestBuffer;
-/*	picPacket[0]=0x55;
-	picPacket[1]=0x55;
-	picPacket[2]=0x55;
-	picPacket[3]=0x55;
-	picPacket[4]=0x55;
-	picPacket[5]=0x55;
-	picPacket[6]=0x55;
-	picPacket[7]=0xD5;*/
 
-	imgIters = 0xAA;	//TSHOOOOOOOOT added this line as a flag to recognize which byte is which at the SysCntlr.
+//	imgIters = 0xAA;	//TSHOOOOOOOOT added this line as a flag to recognize which byte is which at the SysCntlr.
 
 	/* Each packet is 1200 image bytes in picPacket[0..1199], exactly what is transmitted.
 	 * (Filling from [8] left 8 uninitialized bytes at the start of every packet and shifted
@@ -2998,7 +2907,9 @@ void takePic(void){
 //			  HAL_UART_Transmit(&huart1, (unsigned char*)("ISP INIT GOOD\r\n"), 15, 100);
 //		  }
 
+#ifdef CAPTURE_CHECKS
 	  captureCheckPrepare();	//capture debug: fill buffer with 0x5A, zero the counters
+#endif
 	  if (HAL_DCMIPP_CSI_PIPE_Start(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0 , (uint8_t *) Main_DestBuffer, DCMIPP_MODE_CONTINUOUS) != HAL_OK)	//DCMIPP_MODE_SNAPSHOT  //DCMIPP_MODE_CONTINUOUS
 	  {
 		  HAL_UART_Transmit(&huart1, (unsigned char*)("PIPE START FAIL\r\n"), 17, 100);
@@ -3015,14 +2926,16 @@ void takePic(void){
 		  HAL_UART_Transmit(&huart1, (unsigned char*)("ISP START GOOD\r\n"), 16, 100);
 	  }
 	  NbMainFrames=0;
-	  while(NbMainFrames < 30)	//  30/SEC. WAS 60 BEFORE MARCH 8. 5=BLACK. 15=TOO WHITE. 25=A LITTLE DARK. // options for param configs in core/inc/imx335_E27_isp_param_conf.h
+	  while(NbMainFrames < 10)	//  30/SEC. WAS 60 BEFORE MARCH 8. 5=BLACK. 15=TOO WHITE. 25=A LITTLE DARK. // options for param configs in core/inc/imx335_E27_isp_param_conf.h
 	  {
 		  ispBackground();	//auto exposure and auto white balance on each new frame's statistics
 	  }
 	  /* stop the acquisition */
 	  HAL_DCMIPP_CSI_PIPE_Stop(&hdcmipp, DCMIPP_PIPE1, DCMIPP_VIRTUAL_CHANNEL0);
 	  HAL_UART_Transmit(&huart1, (unsigned char*)("DONE FRAMES\r\n"), 13, 100);
+#ifdef CAPTURE_CHECKS
 	  captureCheckReport();	//capture debug: overruns, ISP errors, 0xFF / unwritten runs
+#endif
 
 }
 
@@ -3053,6 +2966,7 @@ void HAL_DCMIPP_PIPE_ErrorCallback(DCMIPP_HandleTypeDef *hdcmipp, uint32_t Pipe)
 	}
 }
 
+#ifdef CAPTURE_CHECKS
 #define CHECK_FILL 0x5A5A5A5AUL	//anything still 0x5A after capture was never written by DCMIPP
 #ifdef RESOLUTION_2400_1600
 #define CHECK_PITCH (IMAGE_WIDTH * 3)	//bytes per image row
@@ -3153,6 +3067,7 @@ void captureCheckReport(void){
 	reportRuns(0xFFFFFFFFUL, "FF", 2);
 	reportEdges();
 }
+#endif /* CAPTURE_CHECKS */
 
 /* USER CODE END 4 */
 
